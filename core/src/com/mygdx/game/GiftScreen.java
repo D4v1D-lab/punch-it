@@ -26,15 +26,17 @@ public class GiftScreen extends BaseScreen {
     private final Animation<TextureRegion> animation;
     private final Sound carStart;
     private final Sound avionStart;
-    private final boolean plane;
+    private final Sound boteStart;
+    private final VehicleType vehicle;
     private float elapsed;
 
-    public GiftScreen(PunchItGame game, boolean plane) {
+    public GiftScreen(PunchItGame game, VehicleType vehicle) {
         super(game);
-        this.plane = plane;
+        this.vehicle = vehicle;
         stage = new Stage(new StretchViewport(WORLD_WIDTH, WORLD_HEIGHT));
         carStart = game.getManager().get("cars/car_start.mp3", Sound.class);
         avionStart = game.getManager().get("plane/avion_start.mp3", Sound.class);
+        boteStart = game.getManager().get("boat/bote_start.mp3", Sound.class);
 
         Texture sheet = game.getManager().get("common/load_gift_sheet.png", Texture.class);
         int frameWidth = sheet.getWidth() / FRAME_COLS;
@@ -63,19 +65,19 @@ public class GiftScreen extends BaseScreen {
     public void show() {
         elapsed = 0f;
         drawable.setRegion(animation.getKeyFrame(0f));
-        carStart.stop();
-        avionStart.stop();
-        if (plane) {
+        stopStarts();
+        if (vehicle == VehicleType.CAR) {
+            carStart.play();
+        } else if (vehicle == VehicleType.PLANE) {
             avionStart.play();
         } else {
-            carStart.play();
+            boteStart.play();
         }
     }
 
     @Override
     public void hide() {
-        carStart.stop();
-        avionStart.stop();
+        stopStarts();
     }
 
     @Override
@@ -89,10 +91,21 @@ public class GiftScreen extends BaseScreen {
         stage.draw();
 
         if (elapsed >= DURATION) {
-            carStart.stop();
-            avionStart.stop();
-            game.setScreen(plane ? game.getAirplaneScreen() : game.getGameScreen());
+            stopStarts();
+            if (vehicle == VehicleType.CAR) {
+                game.setScreen(game.getGameScreen());
+            } else if (vehicle == VehicleType.PLANE) {
+                game.setScreen(game.getAirplaneScreen());
+            } else {
+                game.setScreen(game.getBoatScreen());
+            }
         }
+    }
+
+    private void stopStarts() {
+        carStart.stop();
+        avionStart.stop();
+        boteStart.stop();
     }
 
     @Override

@@ -1,6 +1,6 @@
 # Punch It
 
-Juego 2D de esquiva y carreras hecho con [libGDX](https://libgdx.com/). Eliges entre un coche y un avión, cambias de carril para esquivar obstáculos y completas una carrera de 75 segundos. Cada vehículo tiene su propio escenario y su animación final.
+Juego 2D de esquiva y carreras hecho con [libGDX](https://libgdx.com/). Eliges entre un coche, un avión o un bote, cambias de carril para esquivar obstáculos y completas una carrera de 75 segundos. Cada vehículo tiene su propio escenario y su animación final.
 
 ## Requisitos
 
@@ -40,7 +40,7 @@ Si el juego ya está abierto, ciérralo antes de lanzar cualquier comando de Gra
 ## Controles
 
 - **Menú principal:** flechas arriba/abajo o izquierda/derecha para mover la selección; `Enter` para confirmar.
-- **Selección de vehículo:** izquierda/arriba selecciona el coche; derecha/abajo selecciona el avión; `Enter` empieza.
+- **Selección de vehículo:** izquierda/arriba selecciona el vehículo anterior; derecha/abajo el siguiente. El orden es coche, avión y bote; `Enter` empieza.
 - **Durante la partida:** `Enter` cambia de carril.
   - El cambio prefiere un carril adyacente libre.
   - En los carriles extremos siempre te mueve hacia dentro.
@@ -63,6 +63,13 @@ Si el juego ya está abierto, ciérralo antes de lanzar cualquier comando de Gra
 - La carrera empieza directamente después de la pantalla de carga; no tiene introducción propia ni bocina.
 - Al terminar los 75 segundos se reproduce la animación final del avión y se vuelve al menú de vehículos.
 
+### Bote
+
+- Escenario de mar con olas en movimiento.
+- Obstáculos marinos que aparecen cada 4 segundos.
+- Introducción con bocina de barco y música de motor en bucle durante la carrera.
+- Al terminar los 75 segundos se reproduce la animación final del bote y se vuelve al menú de vehículos.
+
 ## Estructura del proyecto
 
 ```text
@@ -70,15 +77,17 @@ assets/
 ├── cars/       # Recursos exclusivos del coche
 ├── common/     # Menú, pantalla de carga y recursos compartidos
 ├── plane/      # Recursos exclusivos del avión
-└── boat/       # Reservado; vacío por ahora
+└── boat/       # Recursos exclusivos del bote
 
 core/src/com/mygdx/game/
 ├── PunchItGame.java        # AssetManager y creación de pantallas
 ├── MainMenuScreen.java     # Menú principal
-├── VehicleSelectScreen.java# Selección coche/avión
+├── VehicleSelectScreen.java# Selección coche/avión/bote
+├── VehicleType.java        # Enumeración de vehículos
 ├── GiftScreen.java         # Transición compartida de carga
 ├── GameScreen.java         # Modo coche
 ├── AirplaneScreen.java     # Modo avión
+├── BoatScreen.java         # Modo bote
 └── BaseScreen.java         # Base común de pantallas
 
 desktop/src/com/mygdx/game/desktop/
@@ -95,9 +104,10 @@ libGDX no puede cargar GIFs directamente, así que las animaciones se guardan co
 - `assets/common/load_gift_sheet.png`: transición de carga compartida.
 - `assets/cars/car_ending_sheet.png`: final del coche.
 - `assets/plane/avion_ending_sheet.png`: final del avión.
-- `assets/plane/avion_ending.gif`: GIF original del final del avión; no se carga en el juego.
+- `assets/boat/bote_ending_sheet.png`: final del bote.
+- `assets/boat/bote_ending.gif`: GIF original del final del bote; no se carga en el juego.
 
-Los fondos, sprites y audios de cada modo viven en su carpeta correspondiente. Las claves del `AssetManager` deben incluir siempre el prefijo (`cars/`, `common/` o `plane/`).
+Los fondos, sprites y audios de cada modo viven en su carpeta correspondiente. Las claves del `AssetManager` deben incluir siempre el prefijo (`cars/`, `common/`, `plane/` o `boat/`).
 
 ## Notas técnicas
 
