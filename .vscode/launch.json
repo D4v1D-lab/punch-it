@@ -3,11 +3,11 @@
   "configurations": [
     {
       "type": "java",
-      "name": "CumbiaBall (DesktopLauncher)",
+      "name": "Punch It (DesktopLauncher)",
       "request": "launch",
       "mainClass": "com.mygdx.game.desktop.DesktopLauncher",
       "projectName": "desktop",
-      "cwd": "${workspaceFolder}/android/assets",
+      "cwd": "${workspaceFolder}/assets",
       "console": "internalConsole"
     }
   ]

@@ -1,9 +1,9 @@
 sourceCompatibility = 1.7
 sourceSets.main.java.srcDirs = [ "src/" ]
-sourceSets.main.resources.srcDirs = ["../android/assets"]
+sourceSets.main.resources.srcDirs = ["../assets"]
 
 project.ext.mainClassName = "com.mygdx.game.desktop.DesktopLauncher"
-project.ext.assetsDir = new File("../android/assets")
+project.ext.assetsDir = new File("../assets")
 
 task run(dependsOn: classes, type: JavaExec) {
     main = project.mainClassName
@@ -11,10 +11,6 @@ task run(dependsOn: classes, type: JavaExec) {
     standardInput = System.in
     workingDir = project.assetsDir
     ignoreExitValue = true
-    // LWJGL 2 en macOS necesita el primer hilo; scripts/run.sh pasa esta propiedad.
-    if (System.getProperty('os.name').toLowerCase().contains('mac') || project.hasProperty('startOnFirstThread')) {
-        jvmArgs '-XstartOnFirstThread'
-    }
 }
 
 task debug(dependsOn: classes, type: JavaExec) {
@@ -36,7 +32,6 @@ task dist(type: Jar) {
     }
     with jar
 }
-
 
 dist.dependsOn classes
 

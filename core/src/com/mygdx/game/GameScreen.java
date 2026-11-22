@@ -1,229 +1,444 @@
 package com.mygdx.game;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
 import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
-import com.badlogic.gdx.graphics.g2d.SpriteBatch;
-import com.badlogic.gdx.math.Vector2;
-import com.badlogic.gdx.physics.box2d.Contact;
-import com.badlogic.gdx.physics.box2d.ContactImpulse;
-import com.badlogic.gdx.physics.box2d.ContactListener;
-import com.badlogic.gdx.physics.box2d.Manifold;
-import com.badlogic.gdx.physics.box2d.World;
+import com.badlogic.gdx.graphics.g2d.Animation;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.math.Intersector;
+import com.badlogic.gdx.math.MathUtils;
+import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.scenes.scene2d.Stage;
-import com.badlogic.gdx.scenes.scene2d.actions.Actions;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
-import com.badlogic.gdx.utils.viewport.FitViewport;
-import com.mygdx.game.entities.FloorEntity;
-import com.mygdx.game.entities.LevelEntity;
-import com.mygdx.game.entities.PlayerEntity;
-import com.mygdx.game.entities.SpikeEntity;
-
-import java.util.ArrayList;
-import java.util.List;
+import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
+import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.viewport.StretchViewport;
 
 public class GameScreen extends BaseScreen {
-    private Stage stage;
-    private World world;
-    private PlayerEntity player;
-    private List<FloorEntity> floorList = new ArrayList<FloorEntity>();
-    private List<SpikeEntity> spikeList = new ArrayList<SpikeEntity>();
-    private List<LevelEntity> levelList = new ArrayList<LevelEntity>();
-    private Sound jumpSound, deathSound;
-    private Music bgMusic;
-    public Image bground;
-    SpriteBatch batch;
-    Texture img;
 
+    private static final float WORLD_WIDTH = 1376f;
+    private static final float WORLD_HEIGHT = 768f;
+    private static final float GRASS_SIZE = 1376f;
+    private static final float GRASS_SPEED = 90f;
+    private static final float CAR_WIDTH = 90f;
+    private static final float CAR_Y = 45f;
+    private static final int LANE_COUNT = 4;
+    private static final int START_LANE = 1;
+    private static final float LANE_SLIDE_SPEED = 700f;
+    private static final float CONE_WIDTH = 60f;
+    private static final float CONE_SPAWN_INTERVAL = 4f;
+    private static final float LANE_CLEAR_MARGIN = 100f;
+    private static final float RUN_DURATION = 75f;
+    private static final float BLINK_DURATION = 0.5f;
+    private static final float BLINK_INTERVAL = 0.1f;
+    private static final float HORN_TIMEOUT = 2.5f;
+    private static final float CAR_DRIFT_DURATION = 0.86f;
+    private static final float ROAD_BORDER_TEX_PX = 10f;
+    private static final float ROAD_ASPHALT_TEX_PX = 398f;
+    private static final int ENDING_FRAME_COLS = 15;
+    private static final int ENDING_FRAME_ROWS = 10;
+    private static final int ENDING_FRAME_COUNT = 150;
+    private static final float ENDING_FRAME_DURATION = 1f / 15f;
 
-    public GameScreen(final MainGame game) {
+    private enum Phase {
+        INTRO, DRIVING, ENDED
+    }
+
+    private static final class Cone {
+        final Image image;
+        final int lane;
+        boolean alreadyHit;
+
+        Cone(Image image, int lane) {
+            this.image = image;
+            this.lane = lane;
+        }
+    }
+
+    private final Stage stage;
+    private final Image grassA;
+    private final Image grassB;
+    private final Image car;
+    private final Music carHorn;
+    private final Sound carDrive;
+    private final Sound carDrift;
+    private final TextureRegionDrawable coneDrawable;
+    private final Image endingImage;
+    private final TextureRegionDrawable endingDrawable;
+    private final Animation<TextureRegion> endingAnimation;
+    private final Array<Cone> cones = new Array<Cone>();
+    private final Rectangle carRect = new Rectangle();
+    private final Rectangle coneRect = new Rectangle();
+    private final float asphaltLeft;
+    private final float laneWidth;
+
+    private Phase phase = Phase.INTRO;
+    private float scrollOffset;
+    private float carX;
+    private float targetX;
+    private int laneIndex;
+    private float spawnTimer;
+    private float runTimer;
+    private float introElapsed;
+    private boolean hornStarted;
+    private boolean blinking;
+    private float blinkTimer;
+    private float blinkToggleTimer;
+    private float endingElapsed;
+    private boolean endingHornStarted;
+    private boolean endingDriftStarted;
+    private boolean endingDriveStarted;
+    private float endingDriveStartAt;
+
+    public GameScreen(PunchItGame game) {
         super(game);
-        //Charge sound effects
-        jumpSound = game.getManager().get("jump.mp3");
-        deathSound = game.getManager().get("death.mp3");
-        bgMusic= game.getManager().get("song1.mp3");
-        //Instances
-        stage = new Stage(new FitViewport(640, 360));
+        stage = new Stage(new StretchViewport(WORLD_WIDTH, WORLD_HEIGHT));
 
-        world = new World(new Vector2(0, -10), true);
+        Texture grassTexture = game.getManager().get("cars/mosaico_cesped.jpg", Texture.class);
+        grassA = new Image(grassTexture);
+        grassA.setBounds(0, 0, GRASS_SIZE, GRASS_SIZE);
+        grassB = new Image(grassTexture);
+        grassB.setBounds(0, 0, GRASS_SIZE, GRASS_SIZE);
+        stage.addActor(grassA);
+        stage.addActor(grassB);
 
-        //bground
-//        bground = new Image(game.getManager().get("bground.png", Texture.class));
-//        bground.setPosition(0,40);
-//        bground.setSize(640, 320);
-//        stage.addActor(bground);
-        // Background features
-        batch = new SpriteBatch();
-        img = new Texture("bground.png");
+        Texture roadTexture = game.getManager().get("cars/road.jpg", Texture.class);
+        Image road = new Image(roadTexture);
+        float roadWidth = WORLD_HEIGHT * roadTexture.getWidth() / roadTexture.getHeight();
+        float roadLeft = (WORLD_WIDTH - roadWidth) / 2f;
+        road.setBounds(roadLeft, 0, roadWidth, WORLD_HEIGHT);
+        stage.addActor(road);
 
+        float textureScale = roadWidth / roadTexture.getWidth();
+        asphaltLeft = roadLeft + ROAD_BORDER_TEX_PX * textureScale;
+        laneWidth = ROAD_ASPHALT_TEX_PX * textureScale / LANE_COUNT;
 
-        world.setContactListener(new ContactListener() {
+        Texture carTexture = game.getManager().get("cars/carro.png", Texture.class);
+        TextureRegion carRegion = new TextureRegion(carTexture, 190, 134, 120, 227);
+        car = new Image(new TextureRegionDrawable(carRegion));
+        float carHeight = CAR_WIDTH * carRegion.getRegionHeight() / carRegion.getRegionWidth();
+        car.setBounds(0, CAR_Y, CAR_WIDTH, carHeight);
+        stage.addActor(car);
 
-            private boolean areCollided(Contact contact, Object userA, Object userB){
-                return contact.getFixtureA().getUserData().equals(userA) && contact.getFixtureB().getUserData().equals(userB) ||
-                        contact.getFixtureA().getUserData().equals(userB) && contact.getFixtureB().getUserData().equals(userA);
+        Texture coneTexture = game.getManager().get("cars/cono.png", Texture.class);
+        coneDrawable = new TextureRegionDrawable(new TextureRegion(coneTexture, 192, 169, 116, 162));
 
-            }
-
-            @Override
-            public void beginContact(Contact contact) {
-                if (areCollided(contact, "player", "floor")) {
-                    player.setJumping(false);
-                    if (Gdx.input.isTouched()) {
-                        player.setMustJump(true);
-                    }
+        Texture endingSheet = game.getManager().get("cars/car_ending_sheet.png", Texture.class);
+        int endingFrameWidth = endingSheet.getWidth() / ENDING_FRAME_COLS;
+        int endingFrameHeight = endingSheet.getHeight() / ENDING_FRAME_ROWS;
+        TextureRegion[][] endingGrid = TextureRegion.split(endingSheet, endingFrameWidth, endingFrameHeight);
+        TextureRegion[] endingFrames = new TextureRegion[ENDING_FRAME_COUNT];
+        int endingIndex = 0;
+        for (int row = 0; row < ENDING_FRAME_ROWS; row++) {
+            for (int col = 0; col < ENDING_FRAME_COLS; col++) {
+                if (endingIndex < ENDING_FRAME_COUNT) {
+                    endingFrames[endingIndex++] = endingGrid[row][col];
                 }
-                // What happens when we fail
-                if (areCollided(contact, "player", "spike")) {
-                    if (player.isAlive()) {
-                        player.setAlive(false);
-                        //Sounds effects when the player dies
-                        deathSound.play(0.40f);
-                        bgMusic.stop();
-
-                                stage.addAction(
-                                        Actions.sequence(
-                                                Actions.delay(2.85f),
-                                                Actions.run(new Runnable() {
-                                                    @Override
-                                                    public void run() {
-                                                        game.setScreen(game.gameOverScreen);
-                                                    }
-                                                })
-                                        )
-                                );
-                    }
-                }
-                if (areCollided(contact, "player", "finish")) {
-                    if (player.isAlive()) {
-                        player.setAlive(false);
-                        //Sounds effects when the player dies
-
-                        stage.addAction(
-                                Actions.sequence(
-                                        Actions.delay(1.5f),
-                                        Actions.run(new Runnable() {
-                                            @Override
-                                            public void run() {
-                                                game.setScreen(game.gameScreen2);
-                                            }
-                                        })
-                                )
-                        );
-                    }
-                }
-
             }
+        }
+        endingAnimation = new Animation<TextureRegion>(ENDING_FRAME_DURATION, endingFrames);
+        endingAnimation.setPlayMode(Animation.PlayMode.NORMAL);
+        endingDrawable = new TextureRegionDrawable(endingFrames[0]);
+        endingImage = new Image(endingDrawable);
+        float endingWidth = WORLD_HEIGHT * endingFrameWidth / endingFrameHeight;
+        endingImage.setBounds((WORLD_WIDTH - endingWidth) / 2f, 0f, endingWidth, WORLD_HEIGHT);
+        endingImage.setVisible(false);
+        stage.addActor(endingImage);
 
-            @Override
-            public void endContact(Contact contact) {
+        carHorn = game.getManager().get("cars/car_horn.mp3", Music.class);
+        carDrive = game.getManager().get("cars/car_drive.wav", Sound.class);
+        carDrift = game.getManager().get("cars/car_drift.mp3", Sound.class);
+        carHorn.setLooping(false);
+        carHorn.setVolume(0.5f);
 
-            }
+        reset();
+    }
 
-            @Override
-            public void preSolve(Contact contact, Manifold oldManifold) {
+    private void reset() {
+        carHorn.stop();
+        carDrive.stop();
 
-            }
+        for (int i = 0; i < cones.size; i++) {
+            cones.get(i).image.remove();
+        }
+        cones.clear();
 
-            @Override
-            public void postSolve(Contact contact, ContactImpulse impulse) {
+        scrollOffset = 0f;
+        updateGrassPositions();
 
-            }
-        });
+        laneIndex = START_LANE;
+        carX = laneCenterX(laneIndex) - CAR_WIDTH / 2f;
+        targetX = carX;
+        car.setX(carX);
+        car.setVisible(true);
 
+        spawnTimer = 0f;
+        runTimer = 0f;
+        introElapsed = 0f;
+        hornStarted = false;
+        blinking = false;
+        blinkTimer = 0f;
+        blinkToggleTimer = 0f;
+        endingElapsed = 0f;
+        endingHornStarted = false;
+        endingDriftStarted = false;
+        endingDriveStarted = false;
+        endingDriveStartAt = 0f;
+        endingImage.setVisible(false);
+        phase = Phase.INTRO;
     }
 
     @Override
     public void show() {
-        Texture playerTexture = game.getManager().get("ballgamer.png");
-        Texture floorTexture = game.getManager().get("floor.png");
-        Texture overfloorTexture = game.getManager().get("overfloor.png");
-        Texture spikesTexture = game.getManager().get("spikes1.png");
-        Texture finishTexture = game.getManager().get("finish.png");
-        player = new PlayerEntity(world, playerTexture, new Vector2(1.5f, 1.5f));
-
-        floorList.add(new FloorEntity(world, floorTexture, overfloorTexture, 0, 1000, 1));
-        floorList.add(new FloorEntity(world, floorTexture, overfloorTexture, 12, 10, 2));
-        floorList.add(new FloorEntity(world, floorTexture, overfloorTexture, 32, 5, 1.5f));
-        floorList.add(new FloorEntity(world, floorTexture, finishTexture, 105, 10, 1.5f));
-        levelList.add(new LevelEntity(world, finishTexture, 105, 10, 1.6f));
-        spikeList.add(new SpikeEntity(world, spikesTexture, 6, 1));
-        spikeList.add(new SpikeEntity(world, spikesTexture, 18, 2));
-        spikeList.add(new SpikeEntity(world, spikesTexture, 26, 1));
-        spikeList.add(new SpikeEntity(world, spikesTexture, 38, 1));
-        spikeList.add(new SpikeEntity(world, spikesTexture, 47, 1));
-        spikeList.add(new SpikeEntity(world, spikesTexture, 56, 1));
-        spikeList.add(new SpikeEntity(world, spikesTexture, 65, 1));
-        spikeList.add(new SpikeEntity(world, spikesTexture, 74, 1));
-        spikeList.add(new SpikeEntity(world, spikesTexture, 83, 1));
-        spikeList.add(new SpikeEntity(world, spikesTexture, 92, 1));
-        spikeList.add(new SpikeEntity(world, spikesTexture, 101, 1));
-
-
-
-        stage.addActor(player);
-        for (FloorEntity floor : floorList) {
-            stage.addActor(floor);
-        }
-        for (SpikeEntity spike : spikeList) {
-            stage.addActor(spike);
-        }
-        for (LevelEntity finish : levelList) {
-            stage.addActor(finish);
-        }
-
-        bgMusic.play();
+        reset();
+        carHorn.play();
     }
 
     @Override
     public void hide() {
-        jumpSound.stop();
-        deathSound.stop();
-        bgMusic.stop();
-        player.detach();
-        player.remove();
-
+        carHorn.stop();
+        carDrive.stop();
+        carDrift.stop();
     }
 
     @Override
     public void render(float delta) {
-        Gdx.gl.glClearColor(0.4f, 0.5f, 0.8f, 1f);
+        if (phase != Phase.ENDED) {
+            handleInput();
+            updateCarSlide(delta);
+        }
+
+        if (phase == Phase.INTRO) {
+            updateIntro(delta);
+        } else if (phase == Phase.DRIVING) {
+            updateDriving(delta);
+        } else if (phase == Phase.ENDED && updateEnding(delta)) {
+            return;
+        }
+
+        if (blinking && phase != Phase.ENDED) {
+            updateBlink(delta);
+        }
+
+        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-        batch.begin();
-        batch.draw(img, 2, 0);
-        batch.getProjectionMatrix().setToOrtho2D(0, 0, stage.getWidth(), stage.getHeight());
-        batch.end();
-        //Camera movement
-
-        if (player.getX() > 150 && player.isAlive()) {
-            stage.getCamera().translate(Constants.PLAYER_SPEED * delta * Constants.PIXELS_IN_METERS, 0,0);
-        }
-
-        if (Gdx.input.isTouched() && player.isAlive()){
-            jumpSound.play();
-            player.jump();
-        }
-        //Gravity laws
-        stage.act();
-        world.step(delta, 6,2);
+        stage.act(delta);
         stage.draw();
+    }
+
+    private void handleInput() {
+        if (Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
+            moveToSafeLane();
+        }
+    }
+
+    private void moveToLane(int lane) {
+        laneIndex = lane;
+        targetX = laneCenterX(lane) - CAR_WIDTH / 2f;
+        carDrift.stop();
+        carDrift.play();
+    }
+
+    private void moveToSafeLane() {
+        if (laneIndex == 0) {
+            moveToLane(1);
+            return;
+        }
+        if (laneIndex == LANE_COUNT - 1) {
+            moveToLane(LANE_COUNT - 2);
+            return;
+        }
+
+        int leftLane = laneIndex - 1;
+        int rightLane = laneIndex + 1;
+        boolean canLeft = isLaneClear(leftLane);
+        boolean canRight = isLaneClear(rightLane);
+        if (canLeft && canRight) {
+            moveToLane(MathUtils.randomBoolean() ? rightLane : leftLane);
+        } else if (canLeft) {
+            moveToLane(leftLane);
+        } else if (canRight) {
+            moveToLane(rightLane);
+        }
+    }
+
+    private boolean isLaneClear(int lane) {
+        float carBottom = car.getY() - LANE_CLEAR_MARGIN;
+        float carTop = car.getY() + car.getHeight() + LANE_CLEAR_MARGIN;
+        for (int i = 0; i < cones.size; i++) {
+            Cone cone = cones.get(i);
+            if (cone.lane != lane) {
+                continue;
+            }
+            float coneBottom = cone.image.getY();
+            float coneTop = coneBottom + cone.image.getHeight();
+            if (coneTop > carBottom && coneBottom < carTop) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void updateCarSlide(float delta) {
+        float step = LANE_SLIDE_SPEED * delta;
+        if (carX < targetX) {
+            carX = Math.min(carX + step, targetX);
+        } else if (carX > targetX) {
+            carX = Math.max(carX - step, targetX);
+        }
+        car.setX(carX);
+    }
+
+    private float laneCenterX(int lane) {
+        return asphaltLeft + laneWidth * (lane + 0.5f);
+    }
+
+    private void updateGrassPositions() {
+        grassA.setY(scrollOffset);
+        grassB.setY(scrollOffset + GRASS_SIZE);
+    }
+
+    private void updateIntro(float delta) {
+        introElapsed += delta;
+        if (carHorn.isPlaying()) {
+            hornStarted = true;
+        }
+        if ((hornStarted && !carHorn.isPlaying()) || introElapsed >= HORN_TIMEOUT) {
+            startDriving();
+        }
+    }
+
+    private void startDriving() {
+        phase = Phase.DRIVING;
+        runTimer = 0f;
+        spawnTimer = 0f;
+        carDrive.loop(0.3f);
+    }
+
+    private void updateDriving(float delta) {
+        runTimer += delta;
+
+        scrollOffset -= GRASS_SPEED * delta;
+        if (scrollOffset <= -GRASS_SIZE) {
+            scrollOffset += GRASS_SIZE;
+        }
+        updateGrassPositions();
+
+        spawnTimer += delta;
+        while (spawnTimer >= CONE_SPAWN_INTERVAL) {
+            spawnTimer -= CONE_SPAWN_INTERVAL;
+            spawnCone();
+        }
+
+        carRect.set(car.getX(), car.getY(), car.getWidth(), car.getHeight());
+        for (int i = cones.size - 1; i >= 0; i--) {
+            Cone cone = cones.get(i);
+            cone.image.setY(cone.image.getY() - GRASS_SPEED * delta);
+
+            if (cone.image.getY() + cone.image.getHeight() < 0f) {
+                cone.image.remove();
+                cones.removeIndex(i);
+                continue;
+            }
+
+            coneRect.set(cone.image.getX(), cone.image.getY(), cone.image.getWidth(), cone.image.getHeight());
+            if (!cone.alreadyHit && Intersector.overlaps(carRect, coneRect)) {
+                cone.alreadyHit = true;
+                if (!blinking) {
+                    startBlink();
+                }
+            }
+        }
+
+        if (runTimer >= RUN_DURATION) {
+            phase = Phase.ENDED;
+            carDrive.stop();
+            blinking = false;
+            car.setVisible(true);
+            startEnding();
+        }
+    }
+
+    private void startEnding() {
+        carHorn.stop();
+        carHorn.play();
+        endingElapsed = 0f;
+        endingHornStarted = false;
+        endingDriftStarted = false;
+        endingDriveStarted = false;
+        endingDriveStartAt = 0f;
+        endingDrawable.setRegion(endingAnimation.getKeyFrame(0f));
+        endingImage.setVisible(true);
+    }
+
+    private boolean updateEnding(float delta) {
+        endingElapsed += delta;
+        endingDrawable.setRegion(endingAnimation.getKeyFrame(endingElapsed, false));
+
+        if (carHorn.isPlaying()) {
+            endingHornStarted = true;
+        }
+        if (!endingDriftStarted
+                && ((endingHornStarted && !carHorn.isPlaying()) || endingElapsed >= HORN_TIMEOUT)) {
+            carDrift.stop();
+            carDrift.play();
+            endingDriftStarted = true;
+            endingDriveStartAt = endingElapsed + CAR_DRIFT_DURATION;
+        }
+        if (endingDriftStarted && !endingDriveStarted && endingElapsed >= endingDriveStartAt) {
+            carDrive.loop(0.3f);
+            endingDriveStarted = true;
+        }
+
+        if (endingElapsed >= endingAnimation.getAnimationDuration()) {
+            carDrive.stop();
+            carDrift.stop();
+            game.setScreen(game.getVehicleSelectScreen());
+            return true;
+        }
+        return false;
+    }
+
+    private void spawnCone() {
+        int lane = MathUtils.random(0, LANE_COUNT - 1);
+        Image image = new Image(coneDrawable);
+        float coneHeight = CONE_WIDTH * coneDrawable.getRegion().getRegionHeight() / coneDrawable.getRegion().getRegionWidth();
+        image.setBounds(laneCenterX(lane) - CONE_WIDTH / 2f, WORLD_HEIGHT + 10f, CONE_WIDTH, coneHeight);
+        stage.getRoot().addActorBefore(car, image);
+        cones.add(new Cone(image, lane));
+    }
+
+    private void startBlink() {
+        blinking = true;
+        blinkTimer = 0f;
+        blinkToggleTimer = 0f;
+        car.setVisible(false);
+    }
+
+    private void updateBlink(float delta) {
+        blinkTimer += delta;
+        blinkToggleTimer += delta;
+        if (blinkToggleTimer >= BLINK_INTERVAL) {
+            blinkToggleTimer -= BLINK_INTERVAL;
+            car.setVisible(!car.isVisible());
+        }
+        if (blinkTimer >= BLINK_DURATION) {
+            blinking = false;
+            car.setVisible(true);
+        }
+    }
+
+    @Override
+    public void resize(int width, int height) {
+        stage.getViewport().update(width, height, true);
     }
 
     @Override
     public void dispose() {
+        hide();
         stage.dispose();
-        world.dispose();
-
-        for (FloorEntity floor : floorList) {
-            floor.detach();
-            floor.remove();
-
-        }
-        for (SpikeEntity spike : spikeList) {
-            spike.detach();
-            spike.remove();
-        }
     }
 }
