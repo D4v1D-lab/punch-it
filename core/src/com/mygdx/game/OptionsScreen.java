@@ -101,7 +101,7 @@ public class OptionsScreen extends BaseScreen {
 
     private void moveSelection(int direction) {
         selectedIndex = (selectedIndex + direction + BUTTON_COUNT) % BUTTON_COUNT;
-        optionChange.play();
+        optionChange.play(0.75f);
         cancelPending();
         updateSelection();
     }
@@ -115,11 +115,13 @@ public class OptionsScreen extends BaseScreen {
 
     private void activateSelection() {
         if (selectedIndex == METRICAS_INDEX) {
-            optionChange.play();
+            optionChange.play(0.75f);
             GestorMetricas.abrirPaginaMetricas();
+            Gdx.app.exit();
         } else if (selectedIndex == ACERCA_INDEX) {
-            optionChange.play();
+            optionChange.play(0.75f);
             openHtml("artifacts/acerca.html");
+            Gdx.app.exit();
         } else {
             activateReset();
         }
@@ -130,7 +132,7 @@ public class OptionsScreen extends BaseScreen {
             resetPending = true;
             readyShowing = false;
             readyTimer = 0f;
-            optionChange.play();
+            optionChange.play(0.75f);
             statusLabel.setText("SEGURO? ENTER OTRA VEZ");
             statusLabel.setVisible(true);
             updateSelection();
@@ -139,7 +141,7 @@ public class OptionsScreen extends BaseScreen {
             resetPending = false;
             readyShowing = true;
             readyTimer = READY_DURATION;
-            optionChange.play();
+            optionChange.play(0.75f);
             statusLabel.setText("LISTO");
             statusLabel.setVisible(true);
             updateSelection();

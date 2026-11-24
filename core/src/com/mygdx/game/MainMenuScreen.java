@@ -69,7 +69,7 @@ public class MainMenuScreen extends BaseScreen {
 
     private void moveSelection(int direction) {
         selectedIndex = (selectedIndex + direction + 2) % 2;
-        optionChange.play();
+        optionChange.play(0.75f);
         updateSelection();
     }
 

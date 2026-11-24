@@ -98,7 +98,7 @@ public class VehicleSelectScreen extends BaseScreen {
             return;
         }
         selectedIndex = index;
-        optionChange.play();
+        optionChange.play(0.75f);
         updateSelection();
     }
 

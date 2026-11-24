@@ -40,7 +40,7 @@ Si el juego ya está abierto, ciérralo antes de lanzar cualquier comando de Gra
 ## Controles
 
 - **Menú principal:** flechas arriba/abajo o izquierda/derecha para mover la selección; `Enter` para confirmar. `Esc` cierra el juego.
-- **Opciones:** flechas para elegir Métricas, Reiniciar o Acerca de; `Enter` activa la opción. Métricas abre el informe generado en el navegador, Reiniciar pide confirmación con un segundo `Enter` y Acerca abre la dedicatoria; `Esc` vuelve al menú principal.
+- **Opciones:** flechas para elegir Métricas, Reiniciar o Acerca de; `Enter` activa la opción. Métricas y Acerca abren una página en el navegador y cierran el juego para evitar que la ventana fullscreen quede bloqueada en un solo monitor. Reiniciar pide confirmación con un segundo `Enter`; `Esc` vuelve al menú principal.
 - **Selección de vehículo:** izquierda/arriba selecciona el vehículo anterior; derecha/abajo el siguiente. El orden es coche, avión, bote y tren; `Enter` empieza. `Esc` vuelve al menú principal.
 - **Durante la partida:** `Enter` cambia de carril.
   - El cambio prefiere un carril adyacente libre.
