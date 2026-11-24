@@ -15,6 +15,7 @@ import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.TimeUtils;
 import com.badlogic.gdx.utils.viewport.StretchViewport;
 
 public class GameScreen extends BaseScreen {
@@ -42,6 +43,7 @@ public class GameScreen extends BaseScreen {
     private static final int ENDING_FRAME_ROWS = 10;
     private static final int ENDING_FRAME_COUNT = 150;
     private static final float ENDING_FRAME_DURATION = 1f / 15f;
+    private static final float DANGER_ZONE_DISTANCE = 250f;
 
     private enum Phase {
         INTRO, DRIVING, ENDED
@@ -51,6 +53,10 @@ public class GameScreen extends BaseScreen {
         final Image image;
         final int lane;
         boolean alreadyHit;
+        boolean resolved;
+        long dangerEnteredAt;
+        boolean anticipacionRegistrada;
+        boolean amenaza;
 
         Cone(Image image, int lane) {
             this.image = image;
@@ -59,6 +65,8 @@ public class GameScreen extends BaseScreen {
     }
 
     private final Stage stage;
+    private final PauseMenu pauseMenu;
+    private boolean paused;
     private final Image grassA;
     private final Image grassB;
     private final Image car;
@@ -153,13 +161,17 @@ public class GameScreen extends BaseScreen {
         carDrift = game.getManager().get("cars/car_drift.mp3", Sound.class);
         carHorn.setLooping(false);
         carHorn.setVolume(0.5f);
+        pauseMenu = new PauseMenu(game);
 
         reset();
     }
 
     private void reset() {
+        paused = false;
+        pauseMenu.hide();
         carHorn.stop();
         carDrive.stop();
+        carDrift.stop();
 
         for (int i = 0; i < cones.size; i++) {
             cones.get(i).image.remove();
@@ -199,16 +211,49 @@ public class GameScreen extends BaseScreen {
 
     @Override
     public void hide() {
+        paused = false;
+        pauseMenu.hide();
         carHorn.stop();
         carDrive.stop();
         carDrift.stop();
+        GestorMetricas.guardarMetricas();
     }
 
     @Override
     public void render(float delta) {
+        if (paused) {
+            if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
+                resumeGame();
+                return;
+            }
+            int action = pauseMenu.update(delta);
+            if (action == PauseMenu.ACTION_RESUME) {
+                resumeGame();
+                return;
+            }
+            if (action == PauseMenu.ACTION_MENU) {
+                game.setScreen(game.getVehicleSelectScreen());
+                return;
+            }
+            drawFrame();
+            pauseMenu.draw();
+            return;
+        }
+
+        if (phase == Phase.DRIVING && Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
+            pauseGame();
+            drawFrame();
+            pauseMenu.draw();
+            return;
+        }
+
         if (phase != Phase.ENDED) {
             handleInput();
             updateCarSlide(delta);
+        }
+
+        if (phase == Phase.DRIVING) {
+            GestorMetricas.registrarTiempoJuego("auto", delta);
         }
 
         if (phase == Phase.INTRO) {
@@ -223,9 +268,27 @@ public class GameScreen extends BaseScreen {
             updateBlink(delta);
         }
 
+        stage.act(delta);
+        drawFrame();
+    }
+
+    private void pauseGame() {
+        paused = true;
+        pauseMenu.show();
+        carHorn.stop();
+        carDrive.stop();
+        carDrift.stop();
+    }
+
+    private void resumeGame() {
+        paused = false;
+        pauseMenu.hide();
+        carDrive.loop(0.3f);
+    }
+
+    private void drawFrame() {
         Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-        stage.act(delta);
         stage.draw();
     }
 
@@ -236,10 +299,33 @@ public class GameScreen extends BaseScreen {
     }
 
     private void moveToLane(int lane) {
+        registrarAnticipacion();
         laneIndex = lane;
         targetX = laneCenterX(lane) - CAR_WIDTH / 2f;
         carDrift.stop();
         carDrift.play();
+    }
+
+    private void registrarAnticipacion() {
+        long now = TimeUtils.millis();
+        for (int i = 0; i < cones.size; i++) {
+            Cone cone = cones.get(i);
+            if (cone.lane != laneIndex) {
+                continue;
+            }
+            if (cone.resolved || cone.anticipacionRegistrada || cone.dangerEnteredAt == 0) {
+                continue;
+            }
+            if (cone.image.getY() + cone.image.getHeight() < car.getY()) {
+                continue;
+            }
+            long elapsed = now - cone.dangerEnteredAt;
+            if (elapsed > 0 && elapsed <= 10000) {
+                cone.anticipacionRegistrada = true;
+                GestorMetricas.registrarAnticipacion(elapsed);
+                break;
+            }
+        }
     }
 
     private void moveToSafeLane() {
@@ -315,6 +401,7 @@ public class GameScreen extends BaseScreen {
         phase = Phase.DRIVING;
         runTimer = 0f;
         spawnTimer = 0f;
+        carHorn.stop();
         carDrive.loop(0.3f);
     }
 
@@ -344,11 +431,30 @@ public class GameScreen extends BaseScreen {
                 continue;
             }
 
+            if (cone.dangerEnteredAt == 0
+                    && cone.image.getY() <= car.getY() + car.getHeight() + DANGER_ZONE_DISTANCE) {
+                cone.dangerEnteredAt = TimeUtils.millis();
+            }
+            if (cone.lane == laneIndex
+                    && cone.image.getY() + cone.image.getHeight() >= car.getY()
+                    && cone.image.getY() <= car.getY() + car.getHeight() + DANGER_ZONE_DISTANCE) {
+                cone.amenaza = true;
+            }
+
             coneRect.set(cone.image.getX(), cone.image.getY(), cone.image.getWidth(), cone.image.getHeight());
             if (!cone.alreadyHit && Intersector.overlaps(carRect, coneRect)) {
                 cone.alreadyHit = true;
+                cone.resolved = true;
+                GestorMetricas.registrarChoque();
                 if (!blinking) {
                     startBlink();
+                }
+            }
+
+            if (!cone.resolved && cone.image.getY() + cone.image.getHeight() < car.getY()) {
+                cone.resolved = true;
+                if (cone.amenaza) {
+                    GestorMetricas.registrarObstaculoEsquivado();
                 }
             }
         }
@@ -434,11 +540,13 @@ public class GameScreen extends BaseScreen {
     @Override
     public void resize(int width, int height) {
         stage.getViewport().update(width, height, true);
+        pauseMenu.resize(width, height);
     }
 
     @Override
     public void dispose() {
         hide();
+        pauseMenu.dispose();
         stage.dispose();
     }
 }

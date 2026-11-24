@@ -15,6 +15,7 @@ import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.TimeUtils;
 import com.badlogic.gdx.utils.viewport.StretchViewport;
 
 public class BoatScreen extends BaseScreen {
@@ -43,6 +44,7 @@ public class BoatScreen extends BaseScreen {
     private static final int ENDING_FRAME_ROWS = 10;
     private static final int ENDING_FRAME_COUNT = 150;
     private static final float ENDING_FRAME_DURATION = 1f / 15f;
+    private static final float DANGER_ZONE_DISTANCE = 250f;
 
     private enum Phase {
         INTRO, DRIVING, ENDED
@@ -52,6 +54,10 @@ public class BoatScreen extends BaseScreen {
         final Image image;
         final int lane;
         boolean alreadyHit;
+        boolean resolved;
+        long dangerEnteredAt;
+        boolean anticipacionRegistrada;
+        boolean amenaza;
 
         Obstacle(Image image, int lane) {
             this.image = image;
@@ -60,6 +66,8 @@ public class BoatScreen extends BaseScreen {
     }
 
     private final Stage stage;
+    private final PauseMenu pauseMenu;
+    private boolean paused;
     private final Image waterA;
     private final Image waterB;
     private final Image boat;
@@ -155,11 +163,14 @@ public class BoatScreen extends BaseScreen {
         boatDrift = game.getManager().get("boat/bote_drift.mp3", Sound.class);
         boatHorn.setLooping(false);
         boatHorn.setVolume(0.5f);
+        pauseMenu = new PauseMenu(game);
 
         reset();
     }
 
     private void reset() {
+        paused = false;
+        pauseMenu.hide();
         boatHorn.stop();
         boatDrive.stop();
         boatDrift.stop();
@@ -202,16 +213,49 @@ public class BoatScreen extends BaseScreen {
 
     @Override
     public void hide() {
+        paused = false;
+        pauseMenu.hide();
         boatHorn.stop();
         boatDrive.stop();
         boatDrift.stop();
+        GestorMetricas.guardarMetricas();
     }
 
     @Override
     public void render(float delta) {
+        if (paused) {
+            if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
+                resumeGame();
+                return;
+            }
+            int action = pauseMenu.update(delta);
+            if (action == PauseMenu.ACTION_RESUME) {
+                resumeGame();
+                return;
+            }
+            if (action == PauseMenu.ACTION_MENU) {
+                game.setScreen(game.getVehicleSelectScreen());
+                return;
+            }
+            drawFrame();
+            pauseMenu.draw();
+            return;
+        }
+
+        if (phase == Phase.DRIVING && Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
+            pauseGame();
+            drawFrame();
+            pauseMenu.draw();
+            return;
+        }
+
         if (phase != Phase.ENDED) {
             handleInput();
             updateBoatSlide(delta);
+        }
+
+        if (phase == Phase.DRIVING) {
+            GestorMetricas.registrarTiempoJuego("barco", delta);
         }
 
         if (phase == Phase.INTRO) {
@@ -226,9 +270,26 @@ public class BoatScreen extends BaseScreen {
             updateBlink(delta);
         }
 
+        stage.act(delta);
+        drawFrame();
+    }
+
+    private void pauseGame() {
+        paused = true;
+        pauseMenu.show();
+        boatDrive.stop();
+        boatDrift.stop();
+    }
+
+    private void resumeGame() {
+        paused = false;
+        pauseMenu.hide();
+        boatDrive.loop(0.3f);
+    }
+
+    private void drawFrame() {
         Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-        stage.act(delta);
         stage.draw();
     }
 
@@ -239,10 +300,33 @@ public class BoatScreen extends BaseScreen {
     }
 
     private void moveToLane(int lane) {
+        registrarAnticipacion();
         laneIndex = lane;
         targetX = laneCenterX(lane) - BOAT_WIDTH / 2f;
         boatDrift.stop();
         boatDrift.play(BOTE_DRIFT_VOLUME);
+    }
+
+    private void registrarAnticipacion() {
+        long now = TimeUtils.millis();
+        for (int i = 0; i < obstacles.size; i++) {
+            Obstacle obstacle = obstacles.get(i);
+            if (obstacle.lane != laneIndex) {
+                continue;
+            }
+            if (obstacle.resolved || obstacle.anticipacionRegistrada || obstacle.dangerEnteredAt == 0) {
+                continue;
+            }
+            if (obstacle.image.getY() + obstacle.image.getHeight() < boat.getY()) {
+                continue;
+            }
+            long elapsed = now - obstacle.dangerEnteredAt;
+            if (elapsed > 0 && elapsed <= 10000) {
+                obstacle.anticipacionRegistrada = true;
+                GestorMetricas.registrarAnticipacion(elapsed);
+                break;
+            }
+        }
     }
 
     private void moveToSafeLane() {
@@ -348,11 +432,30 @@ public class BoatScreen extends BaseScreen {
                 continue;
             }
 
+            if (obstacle.dangerEnteredAt == 0
+                    && obstacle.image.getY() <= boat.getY() + boat.getHeight() + DANGER_ZONE_DISTANCE) {
+                obstacle.dangerEnteredAt = TimeUtils.millis();
+            }
+            if (obstacle.lane == laneIndex
+                    && obstacle.image.getY() + obstacle.image.getHeight() >= boat.getY()
+                    && obstacle.image.getY() <= boat.getY() + boat.getHeight() + DANGER_ZONE_DISTANCE) {
+                obstacle.amenaza = true;
+            }
+
             obstacleRect.set(obstacle.image.getX(), obstacle.image.getY(), obstacle.image.getWidth(), obstacle.image.getHeight());
             if (!obstacle.alreadyHit && Intersector.overlaps(boatRect, obstacleRect)) {
                 obstacle.alreadyHit = true;
+                obstacle.resolved = true;
+                GestorMetricas.registrarChoque();
                 if (!blinking) {
                     startBlink();
+                }
+            }
+
+            if (!obstacle.resolved && obstacle.image.getY() + obstacle.image.getHeight() < boat.getY()) {
+                obstacle.resolved = true;
+                if (obstacle.amenaza) {
+                    GestorMetricas.registrarObstaculoEsquivado();
                 }
             }
         }
@@ -439,11 +542,13 @@ public class BoatScreen extends BaseScreen {
     @Override
     public void resize(int width, int height) {
         stage.getViewport().update(width, height, true);
+        pauseMenu.resize(width, height);
     }
 
     @Override
     public void dispose() {
         hide();
+        pauseMenu.dispose();
         stage.dispose();
     }
 }

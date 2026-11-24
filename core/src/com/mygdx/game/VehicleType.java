@@ -1,5 +1,5 @@
 package com.mygdx.game;
 
 public enum VehicleType {
-    CAR, PLANE, BOAT
+    CAR, PLANE, BOAT, TRAIN
 }

@@ -27,6 +27,7 @@ public class GiftScreen extends BaseScreen {
     private final Sound carStart;
     private final Sound avionStart;
     private final Sound boteStart;
+    private final Sound trenStart;
     private final VehicleType vehicle;
     private float elapsed;
 
@@ -37,6 +38,7 @@ public class GiftScreen extends BaseScreen {
         carStart = game.getManager().get("cars/car_start.mp3", Sound.class);
         avionStart = game.getManager().get("plane/avion_start.mp3", Sound.class);
         boteStart = game.getManager().get("boat/bote_start.mp3", Sound.class);
+        trenStart = game.getManager().get("train/tren_start.mp3", Sound.class);
 
         Texture sheet = game.getManager().get("common/load_gift_sheet.png", Texture.class);
         int frameWidth = sheet.getWidth() / FRAME_COLS;
@@ -70,8 +72,10 @@ public class GiftScreen extends BaseScreen {
             carStart.play();
         } else if (vehicle == VehicleType.PLANE) {
             avionStart.play();
-        } else {
+        } else if (vehicle == VehicleType.BOAT) {
             boteStart.play();
+        } else if (vehicle == VehicleType.TRAIN) {
+            trenStart.play();
         }
     }
 
@@ -96,8 +100,10 @@ public class GiftScreen extends BaseScreen {
                 game.setScreen(game.getGameScreen());
             } else if (vehicle == VehicleType.PLANE) {
                 game.setScreen(game.getAirplaneScreen());
-            } else {
+            } else if (vehicle == VehicleType.BOAT) {
                 game.setScreen(game.getBoatScreen());
+            } else if (vehicle == VehicleType.TRAIN) {
+                game.setScreen(game.getTrainScreen());
             }
         }
     }
@@ -106,6 +112,7 @@ public class GiftScreen extends BaseScreen {
         carStart.stop();
         avionStart.stop();
         boteStart.stop();
+        trenStart.stop();
     }
 
     @Override

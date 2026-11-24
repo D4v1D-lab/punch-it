@@ -75,8 +75,9 @@ public class MainMenuScreen extends BaseScreen {
 
     private void activateSelection() {
         if (selectedIndex == 0) {
-            music.stop();
             game.setScreen(game.getVehicleSelectScreen());
+        } else {
+            game.setScreen(game.getOptionsScreen());
         }
     }
 
@@ -96,6 +97,10 @@ public class MainMenuScreen extends BaseScreen {
 
     @Override
     public void render(float delta) {
+        if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
+            Gdx.app.exit();
+            return;
+        }
         if (Gdx.input.isKeyJustPressed(Input.Keys.UP) || Gdx.input.isKeyJustPressed(Input.Keys.LEFT)) {
             moveSelection(-1);
         }

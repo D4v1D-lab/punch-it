@@ -17,14 +17,15 @@ public class VehicleSelectScreen extends BaseScreen {
 
     private static final float WORLD_WIDTH = 1376f;
     private static final float WORLD_HEIGHT = 768f;
-    private static final float ICON_HEIGHT = 160f;
-    private static final float ICON_Y = 30f;
-    private static final float ICON_CENTER_SPACING = 240f;
+    private static final float ICON_HEIGHT = 130f;
+    private static final float ICON_Y = 45f;
+    private static final float ICON_CENTER_SPACING = 200f;
     private static final float SELECTED_SCALE = 1.05f;
     private static final float DIMMED_ALPHA = 0.55f;
     private static final int CAR_INDEX = 0;
     private static final int PLANE_INDEX = 1;
     private static final int BOAT_INDEX = 2;
+    private static final int TRAIN_INDEX = 3;
 
     private final Stage stage;
     private final Music music;
@@ -32,6 +33,7 @@ public class VehicleSelectScreen extends BaseScreen {
     private final Image car;
     private final Image plane;
     private final Image boat;
+    private final Image train;
     private int selectedIndex = CAR_INDEX;
 
     public VehicleSelectScreen(PunchItGame game) {
@@ -56,14 +58,19 @@ public class VehicleSelectScreen extends BaseScreen {
         TextureRegion boatRegion = new TextureRegion(boatTexture, 179, 80, 142, 341);
         boat = createIcon(boatRegion, centerX(BOAT_INDEX));
 
+        Texture trainTexture = game.getManager().get("train/tren.png", Texture.class);
+        TextureRegion trainRegion = new TextureRegion(trainTexture, 209, 47, 82, 391);
+        train = createIcon(trainRegion, centerX(TRAIN_INDEX));
+
         stage.addActor(car);
         stage.addActor(plane);
         stage.addActor(boat);
+        stage.addActor(train);
         updateSelection();
     }
 
     private float centerX(int index) {
-        return WORLD_WIDTH / 2f + (index - 1) * ICON_CENTER_SPACING;
+        return WORLD_WIDTH / 2f + (index - 1.5f) * ICON_CENTER_SPACING;
     }
 
     private Image createIcon(TextureRegion region, float centerX) {
@@ -78,6 +85,7 @@ public class VehicleSelectScreen extends BaseScreen {
         updateIcon(car, CAR_INDEX);
         updateIcon(plane, PLANE_INDEX);
         updateIcon(boat, BOAT_INDEX);
+        updateIcon(train, TRAIN_INDEX);
     }
 
     private void updateIcon(Image icon, int index) {
@@ -99,8 +107,10 @@ public class VehicleSelectScreen extends BaseScreen {
             game.setScreen(game.getCarGiftScreen());
         } else if (selectedIndex == PLANE_INDEX) {
             game.setScreen(game.getPlaneGiftScreen());
-        } else {
+        } else if (selectedIndex == BOAT_INDEX) {
             game.setScreen(game.getBoatGiftScreen());
+        } else if (selectedIndex == TRAIN_INDEX) {
+            game.setScreen(game.getTrainGiftScreen());
         }
     }
 
@@ -121,11 +131,15 @@ public class VehicleSelectScreen extends BaseScreen {
 
     @Override
     public void render(float delta) {
+        if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
+            game.setScreen(game.getMainMenuScreen());
+            return;
+        }
         if (Gdx.input.isKeyJustPressed(Input.Keys.LEFT) || Gdx.input.isKeyJustPressed(Input.Keys.UP)) {
             select(Math.max(CAR_INDEX, selectedIndex - 1));
         }
         if (Gdx.input.isKeyJustPressed(Input.Keys.RIGHT) || Gdx.input.isKeyJustPressed(Input.Keys.DOWN)) {
-            select(Math.min(BOAT_INDEX, selectedIndex + 1));
+            select(Math.min(TRAIN_INDEX, selectedIndex + 1));
         }
         if (Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
             activateSelection();
