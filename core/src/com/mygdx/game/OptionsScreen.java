@@ -122,7 +122,7 @@ public class OptionsScreen extends BaseScreen {
         } else if (selectedIndex == ACERCA_INDEX) {
             optionChange.play(0.75f);
             openHtml("artifacts/acerca.html");
-            Gdx.app.exit();
+            closeAfterOpening();
         } else {
             activateReset();
         }
@@ -253,5 +253,26 @@ public class OptionsScreen extends BaseScreen {
 
         FileHandle copied = Gdx.files.local(path);
         return copied.exists() ? copied.file().getAbsoluteFile() : internal.file().getAbsoluteFile();
+    }
+
+    /**
+     * Cierra el juego unos segundos después de abrir el HTML: si se llama a
+     * Gdx.app.exit() de inmediato, el proceso muere antes de que Windows llegue
+     * a lanzar el navegador y la pagina nunca aparece.
+     */
+    private void closeAfterOpening() {
+        Thread closer = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Thread.sleep(2500L);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                Gdx.app.exit();
+            }
+        }, "close-after-html");
+        closer.setDaemon(true);
+        closer.start();
     }
 }
