@@ -3,6 +3,7 @@ package com.mygdx.game;
 import java.io.File;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.audio.Sound;
@@ -149,7 +150,7 @@ public class OptionsScreen extends BaseScreen {
     }
 
     private void openHtml(String path) {
-        File file = Gdx.files.internal(path).file().getAbsoluteFile();
+        File file = materializeFile(path);
         Gdx.net.openURI(file.toURI().toString());
     }
 
@@ -223,5 +224,34 @@ public class OptionsScreen extends BaseScreen {
         hide();
         font.dispose();
         stage.dispose();
+    }
+
+    /**
+     * Devuelve una copia en disco del recurso indicado. Cuando el juego se ejecuta
+     * desde el jar, el archivo solo existe dentro del jar: se extrae junto al
+     * ejecutable para que el navegador pueda abrirlo.
+     */
+    private File materializeFile(String path) {
+        FileHandle local = Gdx.files.local(path);
+        if (local.exists()) {
+            return local.file().getAbsoluteFile();
+        }
+
+        FileHandle internal = Gdx.files.internal(path);
+        try {
+            FileHandle sourceDir = internal.parent();
+            FileHandle targetDir = Gdx.files.local(sourceDir.path());
+            for (FileHandle child : sourceDir.list()) {
+                FileHandle target = targetDir.child(child.name());
+                if (!target.exists()) {
+                    child.copyTo(target);
+                }
+            }
+        } catch (RuntimeException e) {
+            Gdx.app.error("OptionsScreen", "No se pudo extraer " + path, e);
+        }
+
+        FileHandle copied = Gdx.files.local(path);
+        return copied.exists() ? copied.file().getAbsoluteFile() : internal.file().getAbsoluteFile();
     }
 }
