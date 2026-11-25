@@ -241,6 +241,12 @@ public class OptionsScreen extends BaseScreen {
         try {
             FileHandle sourceDir = internal.parent();
             FileHandle targetDir = Gdx.files.local(sourceDir.path());
+            if (!targetDir.exists()) {
+                targetDir.mkdirs();
+                if (!targetDir.exists()) {
+                    Gdx.app.error("OptionsScreen", "No se pudo crear " + targetDir.path());
+                }
+            }
             for (FileHandle child : sourceDir.list()) {
                 FileHandle target = targetDir.child(child.name());
                 if (!target.exists()) {
